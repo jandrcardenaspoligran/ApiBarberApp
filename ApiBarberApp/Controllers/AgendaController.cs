@@ -1,6 +1,7 @@
 ﻿using ApiBarberApp.Models;
 using ApiBarberApp.Repositories;
 using ApiBarberApp.Repositories.Interfaces;
+using ApiBarberApp.Services;
 using ApiBarberApp.Utilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,9 +15,11 @@ namespace ApiBarberApp.Controllers
     public class AgendaController : Controller
     {
         private IAgendaRepository _agendaRepository;
-        public AgendaController(IAgendaRepository agendaRepository)
+        private INotificacionesService _notificacionesService;
+        public AgendaController(IAgendaRepository agendaRepository, INotificacionesService notificacionesService)
         {
             _agendaRepository = agendaRepository;
+            _notificacionesService = notificacionesService;
         }
 
         [HttpGet("ConsultarAgendas")]
@@ -211,6 +214,7 @@ namespace ApiBarberApp.Controllers
         [HttpPost("RegistrarCita")]
         public async Task<ActionResult<RespuestaGeneral<string>>> RegistrarCita([FromForm] Agenda agenda)
         {
+            List<Guid> usuariosANotificar = new List<Guid>();
             RespuestaGeneral<string> res = new RespuestaGeneral<string>();
             IEnumerable<Claim> claims = User.Claims;
             if (agenda.ImgArchivo != null && agenda.ImgArchivo.Length > 0)
@@ -234,9 +238,11 @@ namespace ApiBarberApp.Controllers
             agenda.EditadoPor = new Guid(claims.FirstOrDefault(c => c.Type == "Id")?.Value);
             agenda.FechaActualizacion = Fecha.Actual();
             agenda.Estado = EstadosAgenda.AGENDADA.ToString();
+            usuariosANotificar = new List<Guid>() { new Guid(agenda.IdCliente.ToString()), new Guid(agenda.IdBarber.ToString()) };
             try
             {
                 await _agendaRepository.RegistrarCita(agenda);
+                _notificacionesService.Notificar(new Guid(agenda.IdCliente.ToString()), usuariosANotificar.Distinct().ToList(), agenda, agenda.Estado, "SOLICITUD");
                 res = new RespuestaGeneral<string>()
                 {
                     mensaje = "Registro de cita exitoso.",
@@ -264,13 +270,23 @@ namespace ApiBarberApp.Controllers
         }
 
         [HttpPost("ActualizarCita")]
-        public async Task<ActionResult<RespuestaGeneral<string>>> ActualizarCita([FromBody] Agenda agenda)
+        public async Task<ActionResult<RespuestaGeneral<string>>> ActualizarCita([FromForm] Agenda agenda)
         {
+            List<Guid> usuariosANotificar = new List<Guid>();
             RespuestaGeneral<string> res = new RespuestaGeneral<string>();
+            IEnumerable<Claim> claims = User.Claims;
+            Guid idUsuario = new Guid(claims.FirstOrDefault(c => c.Type == "Id")?.Value);
             try
             {
-                IEnumerable<Claim> claims = User.Claims;
-                Guid idUsuario = new Guid(claims.FirstOrDefault(c => c.Type == "Id")?.Value);
+                string estadoParaNotificacion = "";
+                Agenda agendaActual = await _agendaRepository.ConsultarAgendaPorId(new Guid(agenda.Id.ToString()));
+                if (agendaActual != null)
+                {
+                    if (agendaActual.IdCliente != null)
+                        usuariosANotificar.Add(new Guid(agendaActual.IdCliente.ToString()));
+                    usuariosANotificar.Add(new Guid(agendaActual.IdBarber.ToString()));
+                }
+                if(agenda.IdCliente != null) usuariosANotificar.Add(new Guid(agenda.IdCliente.ToString()));
                 if (agenda.Estado != EstadosAgenda.CANCELADA.ToString() && agenda.Estado != EstadosAgenda.RECHAZADA.ToString())
                 {
                     Agenda agendaNueva = new Agenda()
@@ -281,13 +297,33 @@ namespace ApiBarberApp.Controllers
                         Estado = agenda.Estado,
                         ObsBarber = agenda.ObsBarber,
                         MsgCliente = agenda.MsgCliente,
+                        IdBarber = agenda.IdBarber,
+                        IdCliente = agenda.IdCliente
                     };
+                    if (agenda.ImgArchivo != null && agenda.ImgArchivo.Length > 0)
+                    {
+                        var extension = Path.GetExtension(agenda.ImgArchivo.FileName);
+                        var nombreArchivo = $"{Guid.NewGuid()}{extension}";
+
+                        var ruta = Path.Combine("C:\\BarberApp\\BarberApp\\src\\assets\\imgs\\", "referencias");
+                        Directory.CreateDirectory(ruta);
+
+                        var filePath = Path.Combine(ruta, nombreArchivo);
+
+                        // Guardar el archivo
+                        using (var stream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await agenda.ImgArchivo.CopyToAsync(stream);
+                        }
+                        agendaNueva.ImgReferencia = nombreArchivo;
+                    }
                     await _agendaRepository.ActualizarCita(agendaNueva);
                     res = new RespuestaGeneral<string>()
                     {
                         mensaje = "Actualización de cita exitosa.",
                         estado = EstadosRespuesta.SUCCESS
                     };
+                    estadoParaNotificacion = agenda.Estado;
                 }
                 else if(agenda.Estado == EstadosAgenda.CANCELADA.ToString())
                 {
@@ -307,6 +343,7 @@ namespace ApiBarberApp.Controllers
                         mensaje = "La cita fue cancelada y eliminada de la agenda del cliente y se encuentra en el listado de citas disponibles..",
                         estado = EstadosRespuesta.SUCCESS
                     };
+                    estadoParaNotificacion = "CANCELADA";
                 }else if(agenda.Estado != EstadosAgenda.RECHAZADA.ToString())
                 {
                     Agenda agendaNueva = new Agenda()
@@ -325,7 +362,9 @@ namespace ApiBarberApp.Controllers
                         mensaje = "La cita ha sido rechazada, ya no se mostrará en las citas disponibles y se elimina de la agenda del cliente. Si desea habilitar la cita nuevamente, puede hacerlo desde el historial de citas siempre y cuando la fecha sea a futuro.",
                         estado = EstadosRespuesta.SUCCESS
                     };
+                    estadoParaNotificacion = "FECHA RECHAZADA";
                 }
+                _notificacionesService.Notificar(idUsuario, usuariosANotificar.Distinct().ToList(), agenda, estadoParaNotificacion, "ACTUALIZACION");
             }
             catch (GeneralException ex)
             {

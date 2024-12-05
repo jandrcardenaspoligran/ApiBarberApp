@@ -1,6 +1,7 @@
 using ApiBarberApp.Data;
 using ApiBarberApp.Repositories;
 using ApiBarberApp.Repositories.Interfaces;
+using ApiBarberApp.Services;
 using ApiBarberApp.Utilities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,8 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddHostedService<ApiBarberApp.Services.TareasProgramadasService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -83,6 +86,7 @@ builder.Services.AddScoped<IUsuariosRepository, UsuariosRepository>();
 builder.Services.AddScoped<IRolesRepository, RolesRepository>();
 builder.Services.AddScoped<IAgendaRepository, AgendaRepository>();
 builder.Services.AddScoped<INotificacionesRepository, NotificacionesRepository>();
+builder.Services.AddScoped<INotificacionesService, NotificacionesService>();
 
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddAuthorization();

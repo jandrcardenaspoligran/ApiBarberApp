@@ -164,6 +164,9 @@ namespace ApiBarberApp.Data
                 entity.Property(e => e.FechaHora)
                     .HasColumnName("fecha_hora");
 
+                entity.Property(e => e.Titulo)
+                    .HasColumnName("titulo");
+
                 entity.Property(e => e.Mensaje)
                     .HasColumnName("mensaje");
 

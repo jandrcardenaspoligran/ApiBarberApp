@@ -65,7 +65,7 @@ namespace ApiBarberApp.Repositories
             DateTime fecha = Fecha.Actual();
             List<Agenda> agenda = await _context.Agenda
                 .Include(item => item.Barber)
-                .Where(item => item.IdBarber == idBarber && item.Estado == "DISPONIBLE" && item.Barber.Activo == 1 && item.FechaHora > fecha)
+                .Where(item => item.IdBarber == idBarber && item.Estado == "DISPONIBLE" && item.Barber.Activo == 1 && item.FechaHora.AddHours(5) > fecha)
                 .OrderBy(item => item.FechaHora)
                 .ToListAsync();
             return agenda == null ? new List<Agenda>() : agenda;
@@ -77,7 +77,7 @@ namespace ApiBarberApp.Repositories
                 .Include(item => item.Cliente)
                 .Include(item => item.UsuarioEdicion)
                 .Include(item => item.Barber)
-                .Where(item => item.IdBarber == idBarber && item.Barber.Activo == 1)
+                .Where(item => item.IdBarber == idBarber && item.Barber.Activo == 1 && item.IdCliente != null && item.Estado != EstadosAgenda.DISPONIBLE.ToString())
                 .OrderByDescending(item => item.FechaHora)
                 .ToListAsync();
             return agenda == null ? new List<Agenda>() : agenda;
@@ -110,6 +110,7 @@ namespace ApiBarberApp.Repositories
             citaActual.ObsBarber = agenda.ObsBarber;
             citaActual.FechaActualizacion = agenda.FechaActualizacion;
             citaActual.IdCliente = agenda.IdCliente;
+            citaActual.ImgReferencia = agenda.ImgReferencia == null ? citaActual.ImgReferencia : agenda.ImgReferencia;
             _context.Agenda.Update(citaActual);
             await _context.SaveChangesAsync();
         }

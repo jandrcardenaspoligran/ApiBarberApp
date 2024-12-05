@@ -19,8 +19,11 @@ namespace ApiBarberApp.Models
         [Column("mensaje")]
         public string? Mensaje { get; set; }
 
+        [Column("titulo")]
+        public string? Titulo { get; set; }
+
         [Column("leido")]
-        public int Leido { get; set; }
+        public byte Leido { get; set; }
 
         [Column("fecha_creacion")]
         public DateTime FechaCreacion { get; set; } = Fecha.Actual();

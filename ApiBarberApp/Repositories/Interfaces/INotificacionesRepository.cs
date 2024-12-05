@@ -4,6 +4,8 @@ namespace ApiBarberApp.Repositories.Interfaces
 {
     public interface INotificacionesRepository
     {
-        Task RegistrarNotificacion(Notificacion notificacion);
+        void RegistrarNotificacion(Notificacion notificacion);
+        Task<List<Notificacion>> ConsultarNotificacionesNoLeidas(Guid idUsuario);
+        void MarcarNotificacionesComoLeidas(Guid idUsuario);
     }
 }
